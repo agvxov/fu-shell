@@ -22,6 +22,7 @@
 
 %option noyywrap
 %option nodefault
+%option prefix="lb_"
 
 %x LITERAL
 %%

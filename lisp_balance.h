@@ -6,4 +6,6 @@ enum {
     PARTIAL,  // the provided statement is not closed
     BROKEN,   // the provided is all fucked'n'shieet
 };
+
+void lb_set_input(char * const s);
 #endif

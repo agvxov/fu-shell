@@ -1,120 +1,65 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <readline/readline.h>
-#include <boost/asio.hpp>
+#include <errno.h>
+#include <string>
 
-#include "lisp_balance.h"
-#include "lisp_balance.yy.h"
+#include <unistd.h>
+#include <netdb.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 
-using namespace boost::asio;
+#include "io.h"
+#include "shell.h"
 
-#define PS1 "> "
+#define PORT 10'008 /* default port */
 
-io_service hio_service;
-ip::tcp::socket hsocket(hio_service);
+bool fu_connect(const int port) {
+    struct sockaddr_in server_addr;
+    char buffer[1024] = {0};
 
-bool fu_connect() {
-    ip::tcp::endpoint endpoint(ip::address::from_string("127.0.0.1"), 10008);
-    hsocket.connect(endpoint);
+    if ((fu_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Socket creation failed");
+        return false;
+    }
+
+    server_addr.sin_family      = AF_INET;
+    server_addr.sin_port        = htons(port);
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (connect(fu_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Connection failed");
+        return false;
+    }
 
     return true;
 }
 
-char * transmit(const char * const s) {
-    static char reply[1024];
-    try {
-        std::string message = s;
-        message = std::string() + (char)0x47 + (char)(message.size() / 256) + (char)(message.size() % 256) + message;
-        boost::system::error_code error;
-        write(hsocket, buffer(message), error);
-        if (error) {
-            throw boost::system::system_error(error);
-        }
+bool init(int argc, char * * argv) {
 
-        size_t reply_length = hsocket.read_some(buffer(reply), error);
-        if (error) {
-            throw boost::system::system_error(error);
-        }
-        return reply;
-    } catch (std::exception& e) {
-        puts(e.what());
-        return NULL;
+    prompt1 = getenv("FU_PS1");
+    if (not prompt1) {
+        prompt1 = PS1;
     }
+
+    const int port =
+        (argc > 1)
+            ?
+        std::stoi(argv[1])
+            :
+        PORT
+    ;
+
+    if (not fu_connect(port)) {
+        return false;
+    }
+
+    return true;
 }
 
-int special(const char * const l) {
-    if (!strcmp(l, ".exit")) {
-        return 1;
-    } else if (!strcmp(l, ".connect ")) {
-    } else if (!strcmp(l, ".ping")) {
-    }
-
-    return 0;
-}
-
-void put_response(const char * const s) {
-    /* The script-fu server protocol uses leading bytes
-     *  to communicate meta information for clients
-     *  YYY: https://docs.gimp.org/2.10/en/gimp-filters-script-fu.html#plug-in-script-fu-console
-     */
-    enum {
-        MAGIC_BYTE,
-        ERROR_CODE,
-        LEN_HIGH,
-        LEN_LOW,
-        LEADING_META_SIZE,
-    };
-    const char * const msg = s + LEADING_META_SIZE;
-
-    printf("high: %d low: %d", s[LEN_HIGH], s[LEN_LOW]);
-
-    if (!s[ERROR_CODE]) {
-        fputs("\033[32m", stdout);
-    } else {
-        fputs("\033[31m", stdout);
-    }
-
-    for (int i = 0, h = s[LEN_HIGH]; i != h; i++) {
-        puts("f");
-        fwrite((msg + LEADING_META_SIZE) + (i*256), 256, sizeof(char), stdout);
-    }
-    fwrite(msg + (s[LEN_HIGH]*256), s[LEN_LOW], sizeof(char), stdout);
-
-    fputs("\033[0m", stdout);
-}
-
-bool fu_judge(const char * const input) {
-    bool r;
-    if (special(input)) {
-        return true;
-    }
-
-    char * const cpy = strdup(input);
-    lb_set_input(input);
-
-    const int p = lb_parse();
-    switch (p) {
-        default: {
-            r = false;
-        };
-    }
-
-    put_response(transmit(input));
-    free(cpy);
-    return r;
-}
-
-bool fu_interpret() {
-    bool r;
-    char * input = readline(PS1);
-    r = fu_judge();
-
-    free(input);
-    return r;
-}
-
-signed main() {
-    if (not fu_connect()) {
+signed main(int argc, char * * argv) {
+    if(not init(argc, argv)) {
         return 1;
     }
 
