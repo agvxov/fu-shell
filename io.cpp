@@ -3,6 +3,7 @@
 #include <string>
 
 #include <readline/readline.h>
+#include <readline/history.h>
 
 inline int fu_fd;
 inline const char * prompt1;
@@ -62,5 +63,7 @@ const char * const fu_recieve(fu_response_header_t &header) {
 }
 
 char * fu_readline(bool is_1) {
-    return readline(is_1 ? prompt1 : prompt2);
+    char * const line = readline(is_1 ? prompt1 : prompt2);
+    add_history(line);
+    return line;
 }
